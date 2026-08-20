@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # ============================================================================
-#  TorBox Media Server - Uninstall Script
-#  Removes all containers, configs, data, and systemd service.
+#  TorBox Media Server - Uninstall Script (macOS)
+#  Removes all containers, configs, data, and launchd service.
 # ============================================================================
 
 NON_INTERACTIVE=false
@@ -14,18 +14,11 @@ for arg in "$@"; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Auto-redirect to macOS uninstaller if running on macOS
-if [[ "$(uname)" == "Darwin" ]]; then
-    if [[ -x "${SCRIPT_DIR}/uninstall_macos.sh" ]]; then
-        exec "${SCRIPT_DIR}/uninstall_macos.sh" "$@"
-    fi
-fi
-
 INSTALL_DIR="${SCRIPT_DIR}/torbox-media-server"
 ENV_FILE="${INSTALL_DIR}/.env"
 COMPOSE_FILE="${INSTALL_DIR}/docker-compose.yml"
 SERVICE_NAME="torbox-media-server"
+PLIST_FILE="$HOME/Library/LaunchAgents/com.torbox.media-server.plist"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -65,7 +58,7 @@ compose_cmd() {
 echo -e "${CYAN}"
 cat <<'EOF'
   ╔══════════════════════════════════════════════════════════════╗
-  ║           TorBox Media Server - Uninstall                   ║
+  ║       TorBox Media Server - Uninstall (macOS Edition)        ║
   ╚══════════════════════════════════════════════════════════════╝
 EOF
 echo -e "${NC}"
@@ -78,9 +71,9 @@ fi
 
 echo -e "${YELLOW}This will remove:${NC}"
 echo "  - All Docker containers and the media-network"
-echo "  - Systemd auto-start service (${SERVICE_NAME})"
+echo "  - Launchd auto-start service (${SERVICE_NAME})"
 echo "  - Installation directory: ${INSTALL_DIR}"
-echo "  - Mount point and propagation"
+echo "  - Mount directory and configurations"
 echo ""
 echo -e "${RED}Your TorBox account and cloud-stored media are NOT affected.${NC}"
 echo ""
@@ -98,7 +91,14 @@ if [[ "$NON_INTERACTIVE" != "true" ]]; then
     read -rp "Do you want to create a backup of your configuration before uninstalling? [Y/n]: " create_backup
     create_backup_lower=$(echo "${create_backup:-}" | tr '[:upper:]' '[:lower:]')
     if [[ "$create_backup_lower" != "n" ]]; then
-        if [[ -f "${INSTALL_DIR}/manage.sh" ]]; then
+        if [[ -f "${INSTALL_DIR}/manage_macos.sh" ]]; then
+            log_info "Creating configuration backup..."
+            if bash "${INSTALL_DIR}/manage_macos.sh" backup; then
+                log_info "Backup created successfully."
+            else
+                log_warn "Backup failed. Proceeding with uninstall."
+            fi
+        elif [[ -f "${INSTALL_DIR}/manage.sh" ]]; then
             log_info "Creating configuration backup..."
             if bash "${INSTALL_DIR}/manage.sh" backup; then
                 log_info "Backup created successfully."
@@ -113,7 +113,7 @@ fi
 
 echo ""
 
-# Step 1: Stop and remove containers
+# ==== Step 1: Stop and remove containers ====
 log_info "Stopping and removing Docker containers..."
 if [[ ${#DOCKER_CMD[@]} -eq 0 ]]; then
     detect_compose_cmd
@@ -134,43 +134,34 @@ else
 fi
 
 # Remove the Docker network (dynamically computed from project directory name).
-# Docker normalizes the project name: lowercased, with anything outside [a-z0-9_-]
-# stripped. The default install dir 'torbox-media-server' keeps its hyphens.
 project_name="$(basename "${INSTALL_DIR}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')"
 "${DOCKER_CMD[@]}" network rm "${project_name}_media-network" 2>/dev/null || true
 
-# Step 2: Remove systemd service
-log_info "Removing systemd service..."
-if command -v systemctl &>/dev/null && [[ -d /run/systemd/system ]]; then
-    sudo systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
-    sudo systemctl disable "${SERVICE_NAME}" 2>/dev/null || true
-    sudo rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
-    sudo systemctl daemon-reload || true
-    log_info "Systemd service '${SERVICE_NAME}' removed."
+# ==== Step 2: Remove launchd service ====
+log_info "Removing launchd service..."
+if [[ -f "${PLIST_FILE}" ]]; then
+    launchctl bootout "gui/$(id -u)" "${PLIST_FILE}" 2>/dev/null || true
+    rm -f "${PLIST_FILE}"
+    log_info "Launchd service removed."
 else
-    log_warn "systemd not detected. Skipping service removal."
+    log_warn "Launchd plist not found. Skipping service removal."
 fi
 
-# Step 3: Unmount and remove mount point
-log_info "Cleaning up mount propagation..."
+# ==== Step 3: Unmount and remove mount point ====
+log_info "Cleaning up mount directory..."
 MOUNT_DIR="$(env_val MOUNT_DIR)"
 if [[ -n "${MOUNT_DIR}" && -d "${MOUNT_DIR}" ]]; then
-    # Unmount all nested mounts (deepest first) using findmnt
-    while read -r mount_point; do
-        sudo umount -l "$mount_point" 2>/dev/null || true
-    done < <(findmnt -rn -o TARGET "${MOUNT_DIR}" 2>/dev/null | sort -r)
-    # Unmount the FUSE mount itself
-    if mountpoint -q "${MOUNT_DIR}" 2>/dev/null; then
-        sudo umount -l "${MOUNT_DIR}" 2>/dev/null || true
+    # Unmount if it happens to be mounted
+    if mount | grep -q " on ${MOUNT_DIR} "; then
+        diskutil unmount force "${MOUNT_DIR}" 2>/dev/null || sudo umount -f "${MOUNT_DIR}" 2>/dev/null || true
     fi
-    # Unmount the bind mount
-    sudo umount -l "${MOUNT_DIR}" 2>/dev/null || true
-    sudo rmdir "${MOUNT_DIR}" 2>/dev/null || {
+    
+    rmdir "${MOUNT_DIR}" 2>/dev/null || {
         log_warn "Could not remove mount directory ${MOUNT_DIR} (may not be empty)."
     }
 fi
 
-# Step 4: Read images before deleting directory (for optional cleanup later)
+# ==== Step 4: Read images before deleting directory ====
 _images=()
 if [[ -f "${COMPOSE_FILE}" ]]; then
     while IFS= read -r img; do
@@ -178,23 +169,22 @@ if [[ -f "${COMPOSE_FILE}" ]]; then
     done < <(grep 'image:' "${COMPOSE_FILE}" | awk '{print $2}')
 fi
 
-# Step 5: Remove installation directory
+# ==== Step 5: Remove installation directory ====
 log_info "Removing installation directory..."
 if [[ "${INSTALL_DIR}" == *"/torbox-media-server" ]]; then
     rm -rf "${INSTALL_DIR}"
     log_info "Removed: ${INSTALL_DIR}"
 else
-    # Don't abort — fall through to image cleanup so we don't orphan images.
     log_error "Installation directory path is invalid: ${INSTALL_DIR}"
     log_error "Skipping file removal. Stop containers and remove ${INSTALL_DIR} manually."
 fi
 
-# Step 6: Optionally remove Docker images
+# ==== Step 6: Optionally remove Docker images ====
 echo ""
 if [[ "$NON_INTERACTIVE" == "true" ]]; then
     remove_images="n"
 else
-    read -rp "Remove Docker images to free ~5-8 GB of disk space? [y/N]: " remove_images
+    read -rp "Remove Docker images to free disk space? [y/N]: " remove_images
 fi
 remove_images_lower=$(echo "${remove_images:-}" | tr '[:upper:]' '[:lower:]')
 if [[ "$remove_images_lower" == "y" ]]; then
@@ -224,4 +214,4 @@ echo ""
 echo -e "${GREEN}${BOLD}Uninstall complete.${NC}"
 echo ""
 echo "Your TorBox account and cloud-stored media are unaffected."
-echo "To reinstall, run: ./setup.sh"
+echo "To reinstall, run: ./setup_macos.sh"

@@ -63,7 +63,20 @@ else
     fail "uninstall.sh — invalid bash syntax"
 fi
 
-# 1.3 All test files bash syntax
+# 1.3 setup_macos.sh & uninstall_macos.sh bash syntax
+if bash -n "${PROJECT_ROOT}/setup_macos.sh" 2>/dev/null; then
+    pass "setup_macos.sh — valid bash syntax"
+else
+    fail "setup_macos.sh — invalid bash syntax"
+fi
+
+if bash -n "${PROJECT_ROOT}/uninstall_macos.sh" 2>/dev/null; then
+    pass "uninstall_macos.sh — valid bash syntax"
+else
+    fail "uninstall_macos.sh — invalid bash syntax"
+fi
+
+# 1.4 All test files bash syntax
 for test_file in "${SCRIPT_DIR}"/test_*.sh; do
     if bash -n "$test_file" 2>/dev/null; then
         pass "$(basename "$test_file") — valid bash syntax"
@@ -82,6 +95,12 @@ if [[ -f "$COMPOSE_FILE" ]]; then
     pass "docker-compose.yml exists"
 else
     fail "docker-compose.yml not found"
+fi
+
+if [[ -f "${PROJECT_ROOT}/docker-compose.macos.yml" ]]; then
+    pass "docker-compose.macos.yml exists"
+else
+    fail "docker-compose.macos.yml not found"
 fi
 
 # 2.2 Validate compose with dummy env (Jellyfin profile)
@@ -115,6 +134,13 @@ if command -v docker &>/dev/null; then
         pass "docker-compose.yml validates (Plex profile)"
     else
         fail "docker-compose.yml validation failed (Plex profile)"
+    fi
+
+    if env "${dummy_env[@]}" COMPOSE_PROFILES="jellyfin" \
+        docker compose -f "${PROJECT_ROOT}/docker-compose.macos.yml" config -q 2>/dev/null; then
+        pass "docker-compose.macos.yml validates (Jellyfin profile)"
+    else
+        fail "docker-compose.macos.yml validation failed (Jellyfin profile)"
     fi
 else
     warn "Docker not available — skipping compose validation"
@@ -433,8 +459,8 @@ trap 'rm -f "$tmpfile"' EXIT
 
 # Extract all three heredoc blocks to construct the manage.sh
 {
-    awk "/cat >.*manage.sh.*<<'MANAGE_EOF'/,/^MANAGE_EOF$/" "$SETUP_SCRIPT" | tail -n +2 | head -n -1
-    awk "/cat >>.*manage.sh.*<<'MANAGE_INLINE'/,/^MANAGE_INLINE$/" "$SETUP_SCRIPT" | tail -n +2 | head -n -1
+    awk "/cat >.*manage.sh.*<<'MANAGE_EOF'/,/^MANAGE_EOF$/" "$SETUP_SCRIPT" | tail -n +2 | sed '$d'
+    awk "/cat >>.*manage.sh.*<<'MANAGE_INLINE'/,/^MANAGE_INLINE$/" "$SETUP_SCRIPT" | tail -n +2 | sed '$d'
     # Second MANAGE_EOF block
     awk 'BEGIN{n=0} /MANAGE_EOF/{n++; if(n==2) start=1; if(n==3) start=0} start && n==2{print}' "$SETUP_SCRIPT" | tail -n +2
 } >"$tmpfile" 2>/dev/null

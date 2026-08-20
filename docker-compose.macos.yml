@@ -1,14 +1,8 @@
 # ============================================================================
-#  TorBox Media Server - Docker Compose
+#  TorBox Media Server - Docker Compose (macOS Standalone)
 #
-#  This file is version-controlled in the repo and copied verbatim to the
-#  install directory by setup.sh. Hardware acceleration tweaks live in
-#  docker-compose.override.yml (auto-generated, do not edit by hand).
-#
-#  It IS expected that users edit this file post-install for LAN access
-#  (changing 127.0.0.1:PORT:PORT to PORT:PORT — see README "Accessing From
-#  Other Devices"). Any such edits are preserved across `./manage.sh update`,
-#  but will be overwritten if you re-run `./setup.sh`.
+#  This file is used instead of docker-compose.yml on macOS. It contains
+#  macOS-compatible settings (no FUSE, no mount propagation, no Linux capabilities).
 # ============================================================================
 
 networks:
@@ -17,12 +11,11 @@ networks:
 
 services:
   # ── Decypharr ──────────────────────────────────────────────────
-  # Mocks qBittorrent API for Radarr/Sonarr, connects to TorBox,
-  # handles WebDAV mounting via built-in rclone, and creates symlinks.
+  # Mocks qBittorrent API for Radarr/Sonarr, connects to TorBox.
+  # Torrent-only mode: adds torrents to TorBox cloud (no STRM/symlink).
   decypharr:
-    image: ghcr.io/sirrobot01/decypharr:v2.0
+    image: ghcr.io/sirrobot01/decypharr:v2.4
     container_name: decypharr
-    user: "${PUID:-1000}:${PGID:-1000}"
     restart: unless-stopped
     networks:
       - media-network
@@ -34,12 +27,8 @@ services:
       - UMASK=002
     volumes:
       - "${CONFIG_DIR}/decypharr:/app"
-      - "${MOUNT_DIR}:/mnt/remote:rshared"
       - "${DATA_DIR}:/data"
-    devices:
-      - /dev/fuse:/dev/fuse:rwm
     cap_add:
-      - SYS_ADMIN
       - SETGID
       - SETUID
       - CHOWN
@@ -58,9 +47,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    security_opt:
-      # Harmless on systems without AppArmor (e.g. CachyOS)
-      - apparmor:unconfined
     deploy:
       resources:
         limits:
@@ -111,7 +97,7 @@ services:
   # ── Byparr ────────────────────────────────────────────────────
   # Cloudflare bypass proxy (Byparr - drop-in FlareSolverr replacement).
   byparr:
-    image: ghcr.io/thephaseless/byparr:2.1.0
+    image: ghcr.io/thephaseless/byparr:latest
     container_name: byparr
     restart: unless-stopped
     networks:
@@ -150,7 +136,7 @@ services:
   # Movie management - searches, grabs, and organizes movies.
   # Uses Decypharr as its download client (qBittorrent mock).
   radarr:
-    image: lscr.io/linuxserver/radarr:5.22.4
+    image: lscr.io/linuxserver/radarr:6.3.0
     container_name: radarr
     restart: unless-stopped
     networks:
@@ -185,7 +171,6 @@ services:
     volumes:
       - "${CONFIG_DIR}/radarr:/config"
       - "${DATA_DIR}:/data"
-      - "${MOUNT_DIR}:/mnt/remote:rslave"
     deploy:
       resources:
         limits:
@@ -195,7 +180,7 @@ services:
   # TV show management - searches, grabs, and organizes series.
   # Uses Decypharr as its download client (qBittorrent mock).
   sonarr:
-    image: lscr.io/linuxserver/sonarr:4.0.14
+    image: lscr.io/linuxserver/sonarr:4.0.19
     container_name: sonarr
     restart: unless-stopped
     networks:
@@ -230,7 +215,6 @@ services:
     volumes:
       - "${CONFIG_DIR}/sonarr:/config"
       - "${DATA_DIR}:/data"
-      - "${MOUNT_DIR}:/mnt/remote:rslave"
     deploy:
       resources:
         limits:
@@ -239,7 +223,7 @@ services:
   # ── Seerr ───────────────────────────────────────────────────────
   # Media request & discovery frontend.
   seerr:
-    image: ghcr.io/seerr-team/seerr:v3.2.0
+    image: ghcr.io/seerr-team/seerr:v3.4.1
     container_name: seerr
     restart: unless-stopped
     networks:
@@ -250,9 +234,9 @@ services:
       - TZ=${TZ:-UTC}
     depends_on:
       radarr:
-        condition: service_started
+        condition: service_healthy
       sonarr:
-        condition: service_started
+        condition: service_healthy
     logging:
       driver: json-file
       options:
@@ -277,45 +261,27 @@ services:
         limits:
           memory: 1g
 
-  # ── Plex ───────────────────────────────────────────────────────
-  # Media server option 1 - streams your library to any device.
-  # Activated via COMPOSE_PROFILES=plex in .env
-  plex:
-    image: lscr.io/linuxserver/plex:1.41.5
-    profiles: ["plex"]
-    container_name: plex
-    user: "${PUID:-1000}:${PGID:-1000}"
+  # ── TorBox Media Center ─────────────────────────────────────
+  # Official TorBox client - creates .strm files from your TorBox
+  # cloud library for Jellyfin to stream directly via HTTP.
+  torbox-media-center:
+    image: anonymoussystems/torbox-media-center:2.0.0
+    container_name: torbox-media-center
     restart: unless-stopped
     networks:
       - media-network
-    ports:
-      - "127.0.0.1:32400:32400"
     environment:
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
-      - TZ=${TZ:-UTC}
-      - VERSION=docker
-      - PLEX_CLAIM=${PLEX_CLAIM:-}
-    cap_add:
-      - SETGID
-      - SETUID
-      - CHOWN
-      - DAC_OVERRIDE
-    cap_drop:
-      - ALL
+      - TORBOX_API_KEY=${TORBOX_API_KEY}
+      - MOUNT_METHOD=strm
+      - MOUNT_PATH=/torbox
+      - MOUNT_REFRESH_TIME=ultra_fast
+      - ENABLE_METADATA=false
+      - RAW_MODE=false
+    volumes:
+      - "${DATA_DIR}/media:/torbox"
     depends_on:
       decypharr:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:32400/identity"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    volumes:
-      - "${CONFIG_DIR}/plex:/config"
-      - "${DATA_DIR}:/data"
-      - "${MOUNT_DIR}:/mnt/remote:rslave"
     logging:
       driver: json-file
       options:
@@ -324,14 +290,13 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4g
+          memory: 512m
 
   # ── Jellyfin ───────────────────────────────────────────────────
   # Media server option 2 (open-source) - streams your library.
   # Activated via COMPOSE_PROFILES=jellyfin in .env
   jellyfin:
-    image: lscr.io/linuxserver/jellyfin:10.10.7
-    profiles: ["jellyfin"]
+    image: lscr.io/linuxserver/jellyfin:10.11.11
     container_name: jellyfin
     restart: unless-stopped
     networks:
@@ -357,6 +322,8 @@ services:
     depends_on:
       decypharr:
         condition: service_healthy
+      torbox-media-center:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8096/health"]
       interval: 30s
@@ -366,7 +333,6 @@ services:
     volumes:
       - "${CONFIG_DIR}/jellyfin:/config"
       - "${DATA_DIR}:/data"
-      - "${MOUNT_DIR}:/mnt/remote:rslave"
     logging:
       driver: json-file
       options:

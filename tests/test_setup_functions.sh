@@ -5,6 +5,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/test_utils.sh"
+eval "$(sed -n '/^mask_key() {/,/^}/p' "${SCRIPT_DIR}/../setup.sh")"
 
 echo -e "${CYAN}Running TorBox Media Server test suite...${NC}"
 echo ""

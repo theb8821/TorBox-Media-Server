@@ -73,6 +73,14 @@ cleanup_on_interrupt() {
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Auto-redirect to macOS setup if running on macOS
+if [[ "$(uname)" == "Darwin" ]]; then
+    if [[ -x "${SCRIPT_DIR}/setup_macos.sh" ]]; then
+        exec "${SCRIPT_DIR}/setup_macos.sh" "$@"
+    fi
+fi
+
 INSTALL_DIR="${TORBOX_INSTALL_DIR:-${SCRIPT_DIR}/torbox-media-server}"
 CONFIG_DIR="${INSTALL_DIR}/configs"
 DATA_DIR="${INSTALL_DIR}/data"
@@ -1958,8 +1966,8 @@ configure_arr_service() {
         {"name": "host", "value": "decypharr"},
         {"name": "port", "value": 8282},
         {"name": "useSsl", "value": false},
-        {"name": "username", "value": "${internal_url}"},
-        {"name": "password", "value": "${api_key}"},
+        {"name": "username", "value": "${DECYPHARR_USER:-torbox}"},
+        {"name": "password", "value": "${DECYPHARR_PASS:-}"},
         {"name": "${cat_field}", "value": "${container}"},
         {"name": "${cat_imported_field}", "value": ""},
         {"name": "initialState", "value": 0},
