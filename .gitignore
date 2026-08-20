@@ -7,6 +7,15 @@ docker-compose.override.yml
 docker-compose.override.yaml
 torbox-media-server/
 
+# AI / Agentic agent artifacts
+.gemini/
+.agents/
+.claude/
+.cursor/
+.copilot/
+.aider*
+CLAUDE.md
+
 # Backups (created by manage.sh `backup` and uninstall scripts)
 backups/
 torbox_backup_*/

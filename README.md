@@ -1,14 +1,15 @@
 <div align="center">
 
-# 🎬 TorBox Media Server
+# 🎬 TorBox Media Server (macOS Fork)
 
 **A single-command, zero-storage personal streaming setup — powered by TorBox cloud.**
+*(This is a macOS-optimized fork of the TorBox Media Server project)*
 
-[![ShellCheck](https://github.com/nordicnode/TorBox-Media-Server/actions/workflows/lint.yml/badge.svg)](https://github.com/nordicnode/TorBox-Media-Server/actions/workflows/lint.yml)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Docker](https://img.shields.io/badge/Requires-Docker-blue?logo=docker)](https://docs.docker.com/get-docker/)
 [![TorBox](https://img.shields.io/badge/Powered%20by-TorBox-orange)](https://torbox.app)
-[![Platform Support](https://img.shields.io/badge/OS-Linux%20%7C%20macOS%20%7C%20Windows-brightgreen)](#-platform-support)
+[![Platform Support](https://img.shields.io/badge/OS-macOS-brightgreen)](#-platform-support)
 
 </div>
 
@@ -39,51 +40,9 @@ TORBOX_API_KEY="your-api-key" ./setup_macos.sh --yes
 
 ---
 
-### Linux
-
-```bash
-git clone https://github.com/nordicnode/TorBox-Media-Server.git && cd TorBox-Media-Server
-chmod +x setup.sh && ./setup.sh
-```
-
-For unattended installs:
-
-```bash
-TORBOX_API_KEY="your-api-key" TORBOX_MEDIA_SERVER="jellyfin" ./setup.sh --yes
-```
-
----
-
-### CasaOS (Ubuntu / Debian)
-
-SSH into your CasaOS machine and run:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/nordicnode/TorBox-Media-Server/main/install-casaos.sh | TORBOX_API_KEY="your-api-key" bash
-```
-
----
-
-### Windows
-
-Open **PowerShell** as **Administrator** and run:
-
-```powershell
-git clone https://github.com/nordicnode/TorBox-Media-Server.git
-cd TorBox-Media-Server
-.\setup.ps1
-```
-
----
-
 ## 💻 Platform Support
 
-| Operating System | Streaming Method | Media Server | Auto-Start |
-| :--- | :--- | :--- | :--- |
-| **Linux** (Arch, Ubuntu, Debian, Fedora, CachyOS) | FUSE Mount (`rclone`) | Jellyfin or Plex | `systemd` service |
-| **macOS** (macOS 13+ Intel & Apple Silicon) | STRM Files | Jellyfin | `launchd` service |
-| **Windows** (Windows 10/11) | WinFSP / FUSE Mount | Jellyfin or Plex | Windows Task / Docker |
-| **CasaOS** | FUSE Mount | Jellyfin or Plex | Docker Compose |
+- **macOS** (macOS 13+ Intel & Apple Silicon)
 
 ---
 
@@ -119,11 +78,10 @@ cd TorBox-Media-Server
   TorBox fetches/caches the media in the cloud
                     │
                     ▼
-  Linux/Win: Mounted via WebDAV (rclone FUSE)
   macOS: Pointed via lightweight .strm text files
                     │
                     ▼
-  Streamed directly on Jellyfin / Plex / Smart TV!
+   Streamed directly on Jellyfin!
 ```
 
 ---
@@ -178,7 +136,7 @@ Seerr connects automatically during setup, but if prompted manually:
 
 ## 🛠️ Management Script
 
-Use `manage.sh` (or `manage_macos.sh`) inside your installation directory to control your stack:
+Use `manage.sh` inside your installation directory to control your stack:
 
 ```bash
 cd torbox-media-server
@@ -200,7 +158,6 @@ cd torbox-media-server
 
 ## 🚀 Hardware Acceleration (GPU Transcoding)
 
-- **Linux (Intel / AMD / NVIDIA):** GPU passthrough is auto-detected during `setup.sh` and injected into `docker-compose.override.yml` (`/dev/dri` for Intel/AMD, NVIDIA container toolkit for NVIDIA).
 - **macOS (Apple Silicon M-Series):** Docker Desktop for Mac runs containers in a Linux VM without GPU passthrough. Docker containers use **software (CPU) transcoding**. Apple Silicon M1/M2/M3/M4 CPUs can easily handle 1080p software transcoding.
   - *Advanced Option for macOS 4K Hardware Acceleration:* You can optionally install Jellyfin natively on macOS via Homebrew (`brew install --cask jellyfin`) to leverage Apple Metal GPU transcoding directly.
 
@@ -210,22 +167,8 @@ cd torbox-media-server
 
 To cleanly remove all containers, configuration files, auto-start services, and data directories:
 
-### macOS
-
 ```bash
 ./uninstall_macos.sh
-```
-
-### Linux
-
-```bash
-./uninstall.sh
-```
-
-### Windows
-
-```powershell
-.\uninstall.ps1
 ```
 
 ---

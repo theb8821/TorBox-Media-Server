@@ -20,13 +20,13 @@ fail() {
     failed=$((failed + 1))
 }
 
-# Source functions directly from setup.sh to ensure tests match implementation
-SETUP_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/setup.sh"
+# Source functions directly from setup_macos.sh to ensure tests match implementation
+SETUP_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/setup_macos.sh"
 if [[ -f "$SETUP_SCRIPT" ]]; then
     source <(sed -n '/^generate_api_key() {/,/^}/p' "$SETUP_SCRIPT")
     source <(sed -n '/^mask_key() {/,/^}/p' "$SETUP_SCRIPT")
 else
-    echo "Error: setup.sh not found at $SETUP_SCRIPT"
+    echo "Error: setup_macos.sh not found at $SETUP_SCRIPT"
     exit 1
 fi
 

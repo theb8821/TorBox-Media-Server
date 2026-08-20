@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-# Test suite for generate_api_key function in setup.sh
+# Test suite for generate_api_key function in setup_macos.sh
 # Sources shared test utilities.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/test_utils.sh"
-eval "$(sed -n '/^generate_api_key() {/,/^}/p' "${SCRIPT_DIR}/../setup.sh")"
+eval "$(sed -n '/^generate_api_key() {/,/^}/p' "${SCRIPT_DIR}/../setup_macos.sh")"
 
 echo "Running tests for generate_api_key..."
 
